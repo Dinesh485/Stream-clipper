@@ -28,9 +28,9 @@ def transcribe(video_id: str, model_name: str = "medium") -> str:
     model = WhisperModel(
         model_name,
         device="cpu",
-        compute_type="int8",
-        cpu_threads=_CPU_CORES,
-        num_workers=2,
+        compute_type="float32",
+        cpu_threads=_CPU_CORES,  # intra_threads — threads per operation
+        num_workers=4,           # inter_threads — parallel audio chunk workers
     )
 
     segments_iter, _ = model.transcribe(
