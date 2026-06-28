@@ -392,7 +392,8 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
   const [currentTime, setCurrentTime]     = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [transcript, setTranscript]       = useState([]);
-  const [saveStatus, setSaveStatus]       = useState(null); // null | "saving" | "saved"
+  const [saveStatus, setSaveStatus]       = useState(null);
+  const [vertical, setVertical]           = useState(false); // null | "saving" | "saved"
 
   const videoRef      = useRef(null);
   const previewRef    = useRef(null);
@@ -473,6 +474,28 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
     setIsPreviewing(false);
   }
 
+  function playSegment() {
+    const video = videoRef.current;
+    const seg = segmentsRef.current[activeIdxRef.current];
+    if (!video || !seg) return;
+    stopPreview();
+    video.currentTime = seg.start;
+    video.play();
+    setIsPreviewing(true);
+    function check() {
+      const v = videoRef.current;
+      const s = segmentsRef.current[activeIdxRef.current];
+      if (!v || !s) { stopPreview(); return; }
+      if (v.currentTime >= s.end) {
+        v.currentTime = s.end;
+        v.pause();
+        stopPreview(); return;
+      }
+      previewRef.current = requestAnimationFrame(check);
+    }
+    previewRef.current = requestAnimationFrame(check);
+  }
+
   function playAll() {
     const video = videoRef.current;
     const segs = segmentsRef.current;
@@ -532,6 +555,36 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
     setSegments(prev => [...prev, { id: Date.now(), start: newStart, end: newEnd }]);
   }
 
+  function handleAddSegment(start, end) {
+    setSegments(prev => {
+      const overlapping = prev.filter(s => s.end > start && s.start < end);
+      if (overlapping.length === 0) {
+        return [...prev, { id: Date.now(), start, end }];
+      }
+      if (overlapping.length === 1) {
+        const seg = overlapping[0];
+        const selectionInsideSeg = start >= seg.start && end <= seg.end;
+        if (selectionInsideSeg) {
+          return prev.map(s => s.id === seg.id ? { ...s, start, end } : s);
+        }
+        return prev.map(s => s.id === seg.id
+          ? { ...s, start: Math.min(s.start, start), end: Math.max(s.end, end) }
+          : s
+        );
+      }
+      const mergedStart = Math.min(start, ...overlapping.map(s => s.start));
+      const mergedEnd   = Math.max(end,   ...overlapping.map(s => s.end));
+      const overlappingIds = new Set(overlapping.map(s => s.id));
+      let replaced = false;
+      return prev
+        .filter(s => !overlappingIds.has(s.id) || (!replaced && (replaced = true)))
+        .map(s => s.id === overlapping[0].id
+          ? { ...s, start: mergedStart, end: mergedEnd }
+          : s
+        );
+    });
+  }
+
   const exportTitle = activeIdea?.title || "Custom Clip";
   const exportDescription = activeIdea?.description || null;
 
@@ -566,137 +619,172 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
         >
           {exportQueued ? "✓ Queued" : "⬇ Export"}
         </button>
+        <button
+          className={`btn btn-sm ${vertical ? "btn-secondary" : "btn-ghost"}`}
+          onClick={() => setVertical(v => !v)}
+          title={vertical ? "Switch to landscape (16:9)" : "Switch to portrait (9:16)"}
+        >
+          {vertical ? "▬ 16:9" : "⬜ 9:16"}
+        </button>
       </div>
 
-      <video
-        ref={videoRef}
-        className="ie-video"
-        src={api.videoUrl(videoId)}
-        preload="auto"
-        controls
-        onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
-        onLoadedMetadata={() => setVideoDuration(videoRef.current?.duration ?? 0)}
-        onEnded={stopPreview}
-      />
+      {/* ── Vertical layout: video left, controls right ── */}
+      {vertical ? (
+        <div className="ie-vertical-layout">
+          {/* Left: portrait video */}
+          <div className="ie-vertical-video-col">
+            <video
+              ref={videoRef}
+              className="ie-video-portrait"
+              src={api.videoUrl(videoId)}
+              preload="auto"
+              controls
+              onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
+              onLoadedMetadata={() => setVideoDuration(videoRef.current?.duration ?? 0)}
+              onEnded={stopPreview}
+            />
+          </div>
 
-      {videoDuration > 0 && segments.length > 0 && (
-        <Timeline
-          duration={videoDuration}
-          segments={segments}
-          activeIdx={activeIdx}
-          currentTime={currentTime}
-          onSeek={handleTimelineSeek}
-          onSegmentChange={handleSegmentChange}
-          onSelectSegment={setActiveIdx}
-        />
-      )}
-
-      {activeSeg && segments.length > 0 && (
-        <div className="ie-inout">
-          <div className="ie-inout-label">
-            Segment {activeIdx + 1}
-            <span className="ie-seg-dur">{formatTime(Math.round(Math.max(0, activeSeg.end - activeSeg.start)))}</span>
-            <span className="ie-current-time">▶ {formatTime(Math.round(currentTime))}</span>
-          </div>
-          <div className="ie-inout-row">
-            <span className="ie-tag in-tag">IN {formatTime(Math.round(activeSeg.start))}</span>
-            <span className="ie-arrow">→</span>
-            <span className="ie-tag out-tag">OUT {formatTime(Math.round(activeSeg.end))}</span>
-          </div>
-          <div className="ie-actions">
-            <button className="btn btn-primary btn-sm" onClick={isPreviewing ? stopPreview : playAll}>
-              {isPreviewing ? "⏹ Stop" : "▶ Play All Segments"}
-            </button>
-            <button className="btn btn-ghost btn-sm"
-              onClick={() => { stopPreview(); if (videoRef.current) videoRef.current.currentTime = activeSeg.start; }}>
-              ⏮ IN
-            </button>
-            <button className="btn btn-ghost btn-sm"
-              onClick={() => {
-                stopPreview();
-                if (videoRef.current) {
-                  videoRef.current.currentTime = activeSeg.end;
-                  videoRef.current.play();
-                }
-              }}>
-              OUT → continue ▶
-            </button>
-          </div>
-          <p className="ie-hint">Drag segment edges on the timeline to adjust IN / OUT points</p>
-        </div>
-      )}
-
-      <div className="ie-bottom-row">
-        <div className="ie-segments">
-          <div className="ie-segments-header">
-            <span>Segments</span>
-            <button
-              className="btn btn-sm btn-ghost"
-              style={{ fontSize: "0.72rem", padding: "2px 8px" }}
-              onClick={addSegment}
-              title="Add a new segment after the last one"
-            >
-              + Add
-            </button>
-          </div>
-          {segments.length === 0 && (
-            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-              Select text in the transcript to add segments, or click an idea on the left.
-            </p>
-          )}
-          {segments.map((seg, i) => (
-            <div key={seg.id} className={`ie-seg-row ${i === activeIdx ? "ie-seg-active" : ""}`}
-              onClick={() => setActiveIdx(i)}>
-              <span className="ie-seg-num">{i + 1}</span>
-              <span className="ie-seg-times">
-                <span className="seg-in">{formatTime(Math.round(seg.start))}</span>
-                <span className="seg-sep">→</span>
-                <span className="seg-out">{formatTime(Math.round(seg.end))}</span>
-              </span>
-              <span className="ie-seg-dur-small">{formatTime(Math.round(Math.max(0, seg.end - seg.start)))}</span>
-              <button className="ie-seg-remove" onClick={e => { e.stopPropagation(); removeSegment(i); }}
-                disabled={segments.length <= 1}>✕</button>
+          {/* Right: timeline + inout + segments + transcript stacked */}
+          <div className="ie-vertical-right-col">
+            {videoDuration > 0 && segments.length > 0 && (
+              <Timeline
+                duration={videoDuration}
+                segments={segments}
+                activeIdx={activeIdx}
+                currentTime={currentTime}
+                onSeek={handleTimelineSeek}
+                onSegmentChange={handleSegmentChange}
+                onSelectSegment={setActiveIdx}
+              />
+            )}
+            {activeSeg && segments.length > 0 && (
+              <div className="ie-inout">
+                <div className="ie-actions">
+                  <button className="btn btn-primary btn-sm" onClick={isPreviewing ? stopPreview : playAll}>
+                    {isPreviewing ? "⏹ Stop" : "▶ Play All"}
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={playSegment}>
+                    ▶ This
+                  </button>
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => { stopPreview(); if (videoRef.current) videoRef.current.currentTime = activeSeg.start; }}>
+                    ⏮ IN
+                  </button>
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => { stopPreview(); if (videoRef.current) { videoRef.current.currentTime = activeSeg.end; videoRef.current.play(); } }}>
+                    OUT ▶
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="ie-bottom-row ie-bottom-row-vertical">
+              <div className="ie-segments">
+                <div className="ie-segments-header">
+                  <span>Segments</span>
+                  <button className="btn btn-sm btn-ghost" style={{ fontSize: "0.72rem", padding: "2px 8px" }} onClick={addSegment}>+ Add</button>
+                </div>
+                {segments.length === 0 && (
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    Select text in the transcript to add segments.
+                  </p>
+                )}
+                {segments.map((seg, i) => (
+                  <div key={seg.id} className={`ie-seg-row ${i === activeIdx ? "ie-seg-active" : ""}`} onClick={() => setActiveIdx(i)}>
+                    <span className="ie-seg-num">{i + 1}</span>
+                    <span className="ie-seg-times">
+                      <span className="seg-in">{formatTime(Math.round(seg.start))}</span>
+                      <span className="seg-sep">→</span>
+                      <span className="seg-out">{formatTime(Math.round(seg.end))}</span>
+                    </span>
+                    <span className="ie-seg-dur-small">{formatTime(Math.round(Math.max(0, seg.end - seg.start)))}</span>
+                    <button className="ie-seg-remove" onClick={e => { e.stopPropagation(); removeSegment(i); }} disabled={segments.length <= 1}>✕</button>
+                  </div>
+                ))}
+              </div>
+              {transcript.length > 0 && (
+                <TranscriptPanel transcript={transcript} segments={segments} currentTime={currentTime} onAddSegment={handleAddSegment} />
+              )}
             </div>
-          ))}
+          </div>
         </div>
-
-        {transcript.length > 0 && (
-          <TranscriptPanel
-            transcript={transcript}
-            segments={segments}
-            currentTime={currentTime}
-            onAddSegment={(start, end) => {
-              setSegments(prev => {
-                const overlapping = prev.filter(s => s.end > start && s.start < end);
-                if (overlapping.length === 0) {
-                  return [...prev, { id: Date.now(), start, end }];
-                }
-                if (overlapping.length === 1) {
-                  const seg = overlapping[0];
-                  const selectionInsideSeg = start >= seg.start && end <= seg.end;
-                  if (selectionInsideSeg) {
-                    return prev.map(s => s.id === seg.id ? { ...s, start, end } : s);
-                  }
-                  return prev.map(s => s.id === seg.id
-                    ? { ...s, start: Math.min(s.start, start), end: Math.max(s.end, end) }
-                    : s
-                  );
-                }
-                const mergedStart = Math.min(start, ...overlapping.map(s => s.start));
-                const mergedEnd   = Math.max(end,   ...overlapping.map(s => s.end));
-                const overlappingIds = new Set(overlapping.map(s => s.id));
-                let replaced = false;
-                return prev
-                  .filter(s => !overlappingIds.has(s.id) || (!replaced && (replaced = true)))
-                  .map(s => s.id === overlapping[0].id
-                    ? { ...s, start: mergedStart, end: mergedEnd }
-                    : s
-                  );
-              });
-            }}
+      ) : (
+        /* ── Landscape layout (original) ── */
+        <>
+          <video
+            ref={videoRef}
+            className="ie-video"
+            src={api.videoUrl(videoId)}
+            preload="auto"
+            controls
+            onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
+            onLoadedMetadata={() => setVideoDuration(videoRef.current?.duration ?? 0)}
+            onEnded={stopPreview}
           />
-        )}
-      </div>
+
+          {videoDuration > 0 && segments.length > 0 && (
+            <Timeline
+              duration={videoDuration}
+              segments={segments}
+              activeIdx={activeIdx}
+              currentTime={currentTime}
+              onSeek={handleTimelineSeek}
+              onSegmentChange={handleSegmentChange}
+              onSelectSegment={setActiveIdx}
+            />
+          )}
+
+          {activeSeg && segments.length > 0 && (
+            <div className="ie-inout">
+              <div className="ie-actions">
+                <button className="btn btn-primary btn-sm" onClick={isPreviewing ? stopPreview : playAll}>
+                  {isPreviewing ? "⏹ Stop" : "▶ Play All Segments"}
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={playSegment}>
+                  ▶ This
+                </button>
+                <button className="btn btn-ghost btn-sm"
+                  onClick={() => { stopPreview(); if (videoRef.current) videoRef.current.currentTime = activeSeg.start; }}>
+                  ⏮ IN
+                </button>
+                <button className="btn btn-ghost btn-sm"
+                  onClick={() => { stopPreview(); if (videoRef.current) { videoRef.current.currentTime = activeSeg.end; videoRef.current.play(); } }}>
+                  OUT → continue ▶
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="ie-bottom-row">
+            <div className="ie-segments">
+              <div className="ie-segments-header">
+                <span>Segments</span>
+                <button className="btn btn-sm btn-ghost" style={{ fontSize: "0.72rem", padding: "2px 8px" }} onClick={addSegment} title="Add a new segment after the last one">+ Add</button>
+              </div>
+              {segments.length === 0 && (
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                  Select text in the transcript to add segments, or click an idea on the left.
+                </p>
+              )}
+              {segments.map((seg, i) => (
+                <div key={seg.id} className={`ie-seg-row ${i === activeIdx ? "ie-seg-active" : ""}`} onClick={() => setActiveIdx(i)}>
+                  <span className="ie-seg-num">{i + 1}</span>
+                  <span className="ie-seg-times">
+                    <span className="seg-in">{formatTime(Math.round(seg.start))}</span>
+                    <span className="seg-sep">→</span>
+                    <span className="seg-out">{formatTime(Math.round(seg.end))}</span>
+                  </span>
+                  <span className="ie-seg-dur-small">{formatTime(Math.round(Math.max(0, seg.end - seg.start)))}</span>
+                  <button className="ie-seg-remove" onClick={e => { e.stopPropagation(); removeSegment(i); }} disabled={segments.length <= 1}>✕</button>
+                </div>
+              ))}
+            </div>
+            {transcript.length > 0 && (
+              <TranscriptPanel transcript={transcript} segments={segments} currentTime={currentTime} onAddSegment={handleAddSegment} />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -164,7 +164,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .ie-header {
@@ -186,12 +186,15 @@
 
 .ie-video {
   width: 100%;
-  height: 300px;
+  height: 40%;
   background: #000;
   display: block;
   object-fit: contain;
   flex-shrink: 0;
 }
+
+
+
 
 /* IN/OUT panel */
 .ie-inout {
@@ -246,7 +249,6 @@
   overflow: hidden;
   border-top: 1px solid var(--border);
 }
-
 .ie-segments {
   width: 220px;
   flex-shrink: 0;
@@ -425,3 +427,49 @@
 }
 .idea-card:hover .idea-card-delete { opacity: 1; }
 .idea-card-delete:hover { color: var(--accent); }
+
+/* ── Vertical layout ────────────────────────────────────────────────────── */
+
+.ie-vertical-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.ie-vertical-video-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  background: #000;
+  flex-shrink: 0;
+  width: 40%;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  align-self: stretch;
+}
+
+.ie-video-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+  flex: 1;
+  min-height: 0;
+}
+
+.ie-vertical-right-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ie-bottom-row-vertical {
+  flex: 1;
+  min-height: 0;
+}
