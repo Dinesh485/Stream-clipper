@@ -213,17 +213,28 @@ async def remove_video(video_id: str):
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    # Cancel any active download
     cancel_download(video_id)
+    delete_video(video_id)  # Remove from DB immediately
 
-    # Delete files
-    import shutil
+    # Delete files in background — file may be locked briefly if video is streaming
     vid_dir = DOWNLOADS_DIR / video_id
-    if vid_dir.exists():
-        shutil.rmtree(vid_dir, ignore_errors=True)
+    asyncio.get_event_loop().run_in_executor(None, lambda: _delete_dir(vid_dir))
 
-    delete_video(video_id)
     return {"ok": True}
+
+
+def _delete_dir(path: Path, retries: int = 5, delay: float = 1.0):
+    """Delete a directory, retrying if files are locked (Windows)."""
+    import shutil, time
+    for attempt in range(retries):
+        try:
+            if path.exists():
+                shutil.rmtree(path)
+            return
+        except Exception:
+            if attempt < retries - 1:
+                time.sleep(delay)
+            # Last attempt — give up silently
 
 
 @app.get("/api/videos/{video_id}/status")
