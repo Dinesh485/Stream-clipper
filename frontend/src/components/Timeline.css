@@ -1,0 +1,14 @@
+.timeline-wrap {
+  width: 100%;
+  background: #111;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.timeline-canvas {
+  display: block;
+  width: 100%;
+  cursor: crosshair;
+}

@@ -1,0 +1,37 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/*.pyo
+
+# Database (contains API keys and user data)
+backend/data.db
+
+# Downloaded files
+backend/downloads/
+backend/exports/
+
+# Binaries — kept in repo for easy setup
+# backend/ffmpeg.exe
+# backend/ffprobe.exe
+# backend/yt-dlp.exe
+
+# Environment (no longer used but just in case)
+.env
+.env.*
+!.env.example
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.user
