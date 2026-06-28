@@ -1,11 +1,8 @@
-import os
 from faster_whisper import WhisperModel
 import json
 from pathlib import Path
 
 DOWNLOADS_DIR = Path(__file__).parent / "downloads"
-
-_CPU_CORES = os.cpu_count() or 4
 
 
 def transcribe(video_id: str, model_name: str = "medium") -> str:
@@ -25,14 +22,9 @@ def transcribe(video_id: str, model_name: str = "medium") -> str:
     if json_path.exists():
         return str(json_path)
 
-    model = WhisperModel(
-        model_name,
-        device="cpu",
-        compute_type="float32",
-        cpu_threads=_CPU_CORES,  # intra_threads — threads per operation
-        num_workers=4,           # inter_threads — parallel audio chunk workers
-    )
+    model = WhisperModel(model_name, device="cpu", compute_type="int8")
 
+    # word_timestamps=True gives per-word start/end times
     segments_iter, _ = model.transcribe(
         str(audio_path),
         beam_size=5,
