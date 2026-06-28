@@ -332,21 +332,25 @@
 
 /* Default — outside segments */
 .tw-dim {
-  color: #444;
+  color: #666;
 }
 
 /* Inside a segment */
 .tw-marked {
-  color: var(--text);
+  color: #e0e0e0;
+  background: rgba(42, 157, 143, 0.15);
 }
 
-/* Currently spoken word */
+/* Currently spoken word — always on top of other highlights */
 .tw-current {
-  color: var(--accent);
-  font-weight: 700;
-  background: rgba(230, 57, 70, 0.12);
-  border-radius: 3px;
-  padding: 1px 2px;
+  color: #fff !important;
+  background: rgba(230, 57, 70, 0.6) !important;
+}
+
+/* Words in active transcript play range */
+.tw-playing {
+  background: rgba(244, 162, 97, 0.35);
+  color: #fff;
 }
 
 /* ── Selection popup ────────────────────────────────────────────────────── */

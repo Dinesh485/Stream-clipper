@@ -344,7 +344,7 @@ function IdeaCard({ idea, active, onClick, onDelete, showDelete }) {
 
 // ── SelectionPopup ─────────────────────────────────────────────────────────
 
-function SelectionPopup({ position, overlaps, isShrink, isMerge, isExpand, onAdd, onDismiss }) {
+function SelectionPopup({ position, overlaps, isShrink, isMerge, isExpand, onAdd, onPlay, onDismiss }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -370,6 +370,13 @@ function SelectionPopup({ position, overlaps, isShrink, isMerge, isExpand, onAdd
       onMouseDown={e => e.stopPropagation()}
     >
       <button
+        className="btn btn-sm btn-ghost"
+        onClick={e => { e.stopPropagation(); onPlay(); onDismiss(); }}
+        title="Seek video to selection start and play"
+      >
+        ▶ Play
+      </button>
+      <button
         className="btn btn-sm btn-primary"
         onClick={e => { e.stopPropagation(); onAdd(); onDismiss(); }}
       >
@@ -393,16 +400,38 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
   const [videoDuration, setVideoDuration] = useState(0);
   const [transcript, setTranscript]       = useState([]);
   const [saveStatus, setSaveStatus]       = useState(null);
-  const [vertical, setVertical]           = useState(false); // null | "saving" | "saved"
+  const [vertical, setVertical] = useState(() => {
+    try { return localStorage.getItem(`layout:${videoId}`) === "vertical"; }
+    catch { return false; }
+  });
+
+  function toggleVertical() {
+    setVertical(v => {
+      const next = !v;
+      try { localStorage.setItem(`layout:${videoId}`, next ? "vertical" : "landscape"); }
+      catch {}
+      return next;
+    });
+  } // null | "saving" | "saved"
 
   const videoRef      = useRef(null);
   const previewRef    = useRef(null);
   const segmentsRef   = useRef(segments);
   const activeIdxRef  = useRef(activeIdx);
   const debounceRef   = useRef(null);
+  const autoPlayRef   = useRef(false); // flag to auto-play after idea load
 
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
   useEffect(() => { activeIdxRef.current = activeIdx; }, [activeIdx]);
+
+  // Auto-play all segments after an idea is selected
+  useEffect(() => {
+    if (!autoPlayRef.current || segments.length === 0) return;
+    autoPlayRef.current = false;
+    // Small delay to let the video seek to segment start first
+    const t = setTimeout(() => playAll(), 100);
+    return () => clearTimeout(t);
+  }, [segments]);
 
   // When activeIdea changes, load its segments WITHOUT seeking or remounting video
   useEffect(() => {
@@ -410,6 +439,7 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
       setSegments([]);
       return;
     }
+    autoPlayRef.current = true; // trigger playAll once segments are set
     setSegments((activeIdea.segments || []).map((s, i) => ({ ...s, id: i })));
     setActiveIdx(0);
   }, [activeIdea]);
@@ -424,9 +454,14 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
       v.load();
     }
   }, [downloadStatus]);
+  const prevTranscribeStatus = useRef(null);
   useEffect(() => {
+    const wasRunning = prevTranscribeStatus.current === "running";
+    prevTranscribeStatus.current = transcribeStatus;
+
     if (transcribeStatus !== "done") return;
-    if (transcript.length > 0) return; // already loaded
+    // Fetch on first load OR after a redo (was running → now done)
+    if (transcript.length > 0 && !wasRunning) return;
     axios.get(api.transcriptUrl(videoId))
       .then(r => setTranscript(r.data))
       .catch(() => {});
@@ -472,6 +507,7 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
   function stopPreview() {
     if (previewRef.current) { cancelAnimationFrame(previewRef.current); previewRef.current = null; }
     setIsPreviewing(false);
+    setPlayRange(null);
   }
 
   function playSegment() {
@@ -540,6 +576,30 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
 
   function handleTimelineSeek(t) {
     if (videoRef.current) videoRef.current.currentTime = t;
+  }
+
+  const [playRange, setPlayRange] = useState(null); // { start, end } while transcript playing
+
+  function handleTranscriptPlay(start, end) {
+    const v = videoRef.current;
+    if (!v) return;
+    stopPreview();
+    setPlayRange({ start, end });
+    v.currentTime = start;
+    v.play();
+    setIsPreviewing(true);
+    function check() {
+      if (!videoRef.current) return;
+      if (videoRef.current.currentTime >= end) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = end;
+        stopPreview();
+        setPlayRange(null);
+        return;
+      }
+      previewRef.current = requestAnimationFrame(check);
+    }
+    previewRef.current = requestAnimationFrame(check);
   }
 
   function removeSegment(idx) {
@@ -621,7 +681,7 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
         </button>
         <button
           className={`btn btn-sm ${vertical ? "btn-secondary" : "btn-ghost"}`}
-          onClick={() => setVertical(v => !v)}
+          onClick={() => toggleVertical()}
           title={vertical ? "Switch to landscape (16:9)" : "Switch to portrait (9:16)"}
         >
           {vertical ? "▬ 16:9" : "⬜ 9:16"}
@@ -703,7 +763,7 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
                 ))}
               </div>
               {transcript.length > 0 && (
-                <TranscriptPanel transcript={transcript} segments={segments} currentTime={currentTime} onAddSegment={handleAddSegment} />
+                <TranscriptPanel transcript={transcript} segments={segments} currentTime={currentTime} onAddSegment={handleAddSegment} onSeek={handleTranscriptPlay} playRange={playRange} />
               )}
             </div>
           </div>
@@ -780,7 +840,7 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
               ))}
             </div>
             {transcript.length > 0 && (
-              <TranscriptPanel transcript={transcript} segments={segments} currentTime={currentTime} onAddSegment={handleAddSegment} />
+              <TranscriptPanel transcript={transcript} segments={segments} currentTime={currentTime} onAddSegment={handleAddSegment} onSeek={handleTranscriptPlay} playRange={playRange} />
             )}
           </div>
         </>
@@ -792,7 +852,7 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
 
 // ── TranscriptPanel ────────────────────────────────────────────────────────
 
-function TranscriptPanel({ transcript, segments, currentTime, onAddSegment }) {
+function TranscriptPanel({ transcript, segments, currentTime, onAddSegment, onSeek, playRange }) {
   const currentWordRef = useRef(null);
   const [popup, setPopup] = useState(null);
 
@@ -863,6 +923,7 @@ function TranscriptPanel({ transcript, segments, currentTime, onAddSegment }) {
         {transcript.map((w, i) => {
           const isCurrent = currentTime >= w.start && currentTime <= w.end;
           const inSegment = segments.some(seg => w.end > seg.start && w.start < seg.end);
+          const inPlayRange = playRange && w.start >= playRange.start && w.end <= playRange.end;
 
           return (
             <span
@@ -871,7 +932,7 @@ function TranscriptPanel({ transcript, segments, currentTime, onAddSegment }) {
               data-start={w.start}
               data-end={w.end}
               ref={isCurrent ? currentWordRef : null}
-              className={`tw ${inSegment ? "tw-marked" : "tw-dim"} ${isCurrent ? "tw-current" : ""}`}
+              className={`tw ${inSegment ? "tw-marked" : "tw-dim"} ${isCurrent ? "tw-current" : ""} ${inPlayRange ? "tw-playing" : ""}`}
             >
               {w.word}{" "}
             </span>
@@ -887,6 +948,7 @@ function TranscriptPanel({ transcript, segments, currentTime, onAddSegment }) {
           isMerge={popup.isMerge}
           isExpand={popup.isExpand}
           onAdd={() => onAddSegment(popup.start, popup.end)}
+          onPlay={() => onSeek(popup.start, popup.end)}
           onDismiss={() => {
             setPopup(null);
             window.getSelection()?.removeAllRanges();

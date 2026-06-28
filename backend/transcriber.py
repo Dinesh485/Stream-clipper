@@ -18,17 +18,23 @@ def transcribe(video_id: str, model_name: str = "medium") -> str:
     if not audio_path.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
-    # Skip if already transcribed
+    # Delete existing transcript so it gets regenerated
     if json_path.exists():
-        return str(json_path)
+        json_path.unlink()
 
     model = WhisperModel(model_name, device="cpu", compute_type="int8")
 
     # word_timestamps=True gives per-word start/end times
-    segments_iter, _ = model.transcribe(
+    # vad_filter removes silence — critical for long audio to prevent hallucinations
+    # language="en" prevents wrong language detection mid-stream (change if needed)
+    segments_iter, info = model.transcribe(
         str(audio_path),
+        language="en",
         beam_size=5,
         word_timestamps=True,
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 500},
+        condition_on_previous_text=False,
     )
 
     words = []
