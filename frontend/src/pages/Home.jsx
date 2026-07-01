@@ -13,7 +13,7 @@ function hasRunningStatus(videos) {
   );
 }
 
-export default function Home({ onSelectVideo, showAddModal, onAddModalClose }) {
+export default function Home({ onSelectVideo, showAddModal, onAddModalClose, onVideoAdded, refreshKey }) {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const pollRef = useRef(null);
@@ -29,10 +29,11 @@ export default function Home({ onSelectVideo, showAddModal, onAddModalClose }) {
     }
   }, []);
 
-  // Initial load
+  // Initial load + re-fetch when refreshKey changes
   useEffect(() => {
+    setLoading(true);
     fetchVideos().finally(() => setLoading(false));
-  }, [fetchVideos]);
+  }, [fetchVideos, refreshKey]);
 
   // Polling
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function Home({ onSelectVideo, showAddModal, onAddModalClose }) {
       if (exists) return prev;
       return [video, ...prev];
     });
+    if (onVideoAdded) onVideoAdded(video);
     // Start polling immediately
     if (pollRef.current) clearTimeout(pollRef.current);
     pollRef.current = setTimeout(async () => {

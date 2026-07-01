@@ -161,3 +161,23 @@
   gap: 6px;
   flex-shrink: 0;
 }
+
+.export-item-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+.yt-badge a {
+  text-decoration: none;
+}
+
+.yt-upload-btn {
+  background: #ff0000 !important;
+  color: #fff !important;
+  border-color: #cc0000 !important;
+}
+.yt-upload-btn:hover:not(:disabled) {
+  background: #cc0000 !important;
+}

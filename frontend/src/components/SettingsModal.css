@@ -141,3 +141,35 @@ select.settings-input { cursor: pointer; }
   display: flex;
   gap: 10px;
 }
+
+/* YouTube connect section */
+.yt-connect-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.yt-connected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.yt-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ff0000 !important;
+  border-color: #cc0000 !important;
+}
+.yt-connect-btn:hover:not(:disabled) {
+  background: #cc0000 !important;
+}
+
+.yt-creds-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

@@ -40,10 +40,10 @@ Rules:
 """
 
 
-def get_clip_ideas(transcript: list, api_key: str) -> dict:
+def get_clip_ideas(transcript: list, api_key: str, model_name: str = "gemini-2.5-flash") -> dict:
     """Send transcript to Gemini and get clip ideas JSON."""
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel(model_name)
 
     prompt = f"{SYSTEM_PROMPT}\n\nTRANSCRIPT:\n{json.dumps(transcript, ensure_ascii=False)}"
 

@@ -50,12 +50,38 @@ export const api = {
   deleteIdea: (videoId, ideaIdx) =>
     axios.delete(`/api/videos/${videoId}/ideas/${ideaIdx}`).then(r => r.data),
 
+  // Gemini models
+  listGeminiModels: () =>
+    axios.get(`/api/gemini/models`).then((r) => r.data),
+
   // Settings
   getSettings: () =>
     axios.get(`/api/settings`).then((r) => r.data),
 
   updateSettings: (fields) =>
     axios.put(`/api/settings`, fields).then((r) => r.data),
+
+  // YouTube OAuth
+  getYouTubeStatus: () =>
+    axios.get(`/api/youtube/status`).then((r) => r.data),
+
+  getYouTubeAuthUrl: () =>
+    axios.get(`/api/youtube/auth-url`).then((r) => r.data),
+
+  disconnectYouTube: () =>
+    axios.post(`/api/youtube/disconnect`).then((r) => r.data),
+
+  // YouTube channel videos (completed live broadcasts)
+  getChannelVideos: (maxResults = 50, pageToken = null, bust = false) => {
+    const params = { max_results: maxResults };
+    if (pageToken) params.page_token = pageToken;
+    if (bust) params.bust = true;
+    return axios.get(`/api/youtube/channel-videos`, { params }).then((r) => r.data);
+  },
+
+  // Upload exported clip to YouTube
+  uploadToYouTube: (exportId, privacyStatus = "private") =>
+    axios.post(`/api/youtube/upload`, { export_id: exportId, privacy_status: privacyStatus }).then((r) => r.data),
 
   // File URLs
   thumbnailUrl: (id) => `/thumbnails/${id}`,

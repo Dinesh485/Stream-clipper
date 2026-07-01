@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { api } from "../api";
 import "./ExportsPanel.css";
 
 function useCopy() {
@@ -24,7 +25,10 @@ function CopyButton({ text }) {
 }
 
 function hasRunning(exports) {
-  return exports.some(e => e.status === "running" || e.status === "pending");
+  return exports.some(e =>
+    e.status === "running" || e.status === "pending" ||
+    e.yt_upload_status === "uploading"
+  );
 }
 
 function StatusBadge({ status }) {
@@ -43,8 +47,32 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function ExportsPanel({ onClose }) {
-  const [exports, setExports] = useState([]);
+function YtUploadBadge({ status, progress, videoUrl }) {
+  if (!status || status === "idle") return null;
+
+  const map = {
+    uploading: { label: `Uploading${progress > 0 ? ` ${Math.round(progress)}%` : "..."}`, color: "#f4a261" },
+    done:      { label: "On YouTube ✓", color: "#ff4444" },
+    error:     { label: "Upload failed", color: "#e63946" },
+  };
+  const s = map[status];
+  if (!s) return null;
+
+  return (
+    <span className="export-badge yt-badge" style={{ color: s.color, borderColor: s.color }}>
+      {status === "uploading" && <span className="export-spinner" />}
+      {status === "done" && videoUrl
+        ? <a href={videoUrl} target="_blank" rel="noreferrer" style={{ color: s.color, textDecoration: "none" }}>
+            ▶ {s.label}
+          </a>
+        : s.label}
+    </span>
+  );
+}
+
+export default function ExportsPanel({ onClose, ytAuthenticated }) {
+  const [exports, setExports]     = useState([]);
+  const [uploading, setUploading] = useState({});
   const pollRef = useRef(null);
 
   async function fetchExports() {
@@ -84,6 +112,21 @@ export default function ExportsPanel({ onClose }) {
     a.remove();
   }
 
+  async function handleUpload(ex) {
+    if (uploading[ex.id]) return;
+    setUploading(prev => ({ ...prev, [ex.id]: true }));
+    try {
+      await api.uploadToYouTube(ex.id, "private");
+      // Start polling to track upload progress
+      const updated = await fetchExports();
+      // polling loop handles the rest
+    } catch (e) {
+      alert(e.response?.data?.detail || e.message || "Upload failed");
+    } finally {
+      setUploading(prev => ({ ...prev, [ex.id]: false }));
+    }
+  }
+
   return (
     <div className="exports-overlay" onClick={onClose}>
       <div className="exports-panel" onClick={e => e.stopPropagation()}>
@@ -112,18 +155,44 @@ export default function ExportsPanel({ onClose }) {
                       <CopyButton text={ex.description} />
                     </div>
                   )}
-                  <StatusBadge status={ex.status} />
+                  <div className="export-item-badges">
+                    <StatusBadge status={ex.status} />
+                    <YtUploadBadge
+                      status={ex.yt_upload_status}
+                      progress={ex.yt_upload_progress}
+                      videoUrl={ex.yt_video_url}
+                    />
+                  </div>
                   {ex.error && <span className="export-item-error">{ex.error}</span>}
+                  {ex.yt_upload_error && (
+                    <span className="export-item-error">YouTube: {ex.yt_upload_error}</span>
+                  )}
                 </div>
+
                 <div className="export-item-actions">
                   {ex.status === "done" && (
                     <button className="btn btn-primary btn-sm" onClick={() => handleDownload(ex)}>
                       ⬇ Download
                     </button>
                   )}
+                  {/* Upload to YouTube — only show for manual retry after failure */}
+                  {ex.status === "done" &&
+                   ytAuthenticated &&
+                   ex.yt_upload_status === "error" && (
+                    <button
+                      className="btn btn-sm yt-upload-btn"
+                      onClick={() => handleUpload(ex)}
+                      disabled={uploading[ex.id]}
+                      title="Retry upload to YouTube"
+                    >
+                      {uploading[ex.id]
+                        ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Uploading...</>
+                        : "↑ Retry Upload"}
+                    </button>
+                  )}
                   <button className="btn btn-ghost btn-sm"
                     onClick={e => handleDelete(ex.id, e)}
-                    disabled={ex.status === "running"}>
+                    disabled={ex.status === "running" || ex.yt_upload_status === "uploading"}>
                     🗑
                   </button>
                 </div>

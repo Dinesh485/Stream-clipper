@@ -166,3 +166,15 @@ body {
   min-height: 0;
   overflow: hidden;
 }
+
+/* YouTube channel button in topbar */
+.yt-channel-btn {
+  background: rgba(255, 0, 0, 0.12) !important;
+  color: #ff4444 !important;
+  border-color: rgba(255, 0, 0, 0.35) !important;
+}
+.yt-channel-btn:hover:not(:disabled) {
+  background: rgba(255, 0, 0, 0.22) !important;
+  border-color: rgba(255, 0, 0, 0.6) !important;
+  color: #ff6666 !important;
+}

@@ -44,6 +44,11 @@ def init_db():
                 status TEXT DEFAULT 'pending',
                 error TEXT,
                 file_path TEXT,
+                yt_upload_status TEXT DEFAULT 'idle',
+                yt_upload_progress REAL DEFAULT 0,
+                yt_upload_error TEXT,
+                yt_video_id TEXT,
+                yt_video_url TEXT,
                 created_at TEXT,
                 updated_at TEXT
             )
@@ -54,6 +59,20 @@ def init_db():
                 value TEXT NOT NULL
             )
         """)
+        # Migrate existing exports table — add YouTube columns if missing
+        existing_cols = {
+            row[1] for row in conn.execute("PRAGMA table_info(exports)").fetchall()
+        }
+        yt_cols = {
+            "yt_upload_status":   "TEXT DEFAULT 'idle'",
+            "yt_upload_progress": "REAL DEFAULT 0",
+            "yt_upload_error":    "TEXT",
+            "yt_video_id":        "TEXT",
+            "yt_video_url":       "TEXT",
+        }
+        for col, col_def in yt_cols.items():
+            if col not in existing_cols:
+                conn.execute(f"ALTER TABLE exports ADD COLUMN {col} {col_def}")
         conn.commit()
 
 
