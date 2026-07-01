@@ -24,9 +24,6 @@ def transcribe(video_id: str, model_name: str = "medium") -> str:
 
     model = WhisperModel(model_name, device="cpu", compute_type="int8")
 
-    # word_timestamps=True gives per-word start/end times
-    # vad_filter removes silence — critical for long audio to prevent hallucinations
-    # language="en" prevents wrong language detection mid-stream (change if needed)
     segments_iter, info = model.transcribe(
         str(audio_path),
         language="en",
@@ -49,6 +46,56 @@ def transcribe(video_id: str, model_name: str = "medium") -> str:
 
     json_path.write_text(json.dumps(words, ensure_ascii=False), encoding="utf-8")
     return str(json_path)
+
+
+def transcribe_file(audio_path: str, model_name: str = "medium") -> list:
+    """
+    Run faster-whisper on an arbitrary audio file.
+    Returns list of segment dicts: [{ "start", "end", "text" }, ...]
+    (segment-level, not word-level — better for caption generation)
+    """
+    model = WhisperModel(model_name, device="cpu", compute_type="int8")
+
+    segments_iter, _ = model.transcribe(
+        audio_path,
+        language="en",
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 500},
+        condition_on_previous_text=False,
+    )
+
+    return [
+        {
+            "start": round(seg.start, 3),
+            "end":   round(seg.end, 3),
+            "text":  seg.text.strip(),
+        }
+        for seg in segments_iter
+        if seg.text.strip()
+    ]
+
+
+def generate_srt(segments: list) -> str:
+    """
+    Convert a list of { start, end, text } segments into SRT format string.
+    """
+    lines = []
+    for i, seg in enumerate(segments, 1):
+        lines.append(str(i))
+        lines.append(f"{_fmt_srt_time(seg['start'])} --> {_fmt_srt_time(seg['end'])}")
+        lines.append(seg["text"])
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _fmt_srt_time(seconds: float) -> str:
+    """Format seconds as SRT timestamp: HH:MM:SS,mmm"""
+    ms  = int(round(seconds * 1000))
+    h   = ms // 3_600_000;  ms %= 3_600_000
+    m   = ms // 60_000;     ms %= 60_000
+    s   = ms // 1_000;      ms %= 1_000
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
 def read_transcript(video_id: str) -> list:

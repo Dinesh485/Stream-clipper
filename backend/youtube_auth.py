@@ -13,6 +13,7 @@ from db import get_setting, set_setting
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.force-ssl",  # required for captions.insert
 ]
 
 # Where we tell Google to redirect after auth

@@ -27,7 +27,9 @@ function CopyButton({ text }) {
 function hasRunning(exports) {
   return exports.some(e =>
     e.status === "running" || e.status === "pending" ||
-    e.yt_upload_status === "uploading"
+    e.yt_upload_status === "uploading" ||
+    e.yt_caption_status === "transcribing" ||
+    e.yt_caption_status === "uploading"
   );
 }
 
@@ -51,9 +53,9 @@ function YtUploadBadge({ status, progress, videoUrl }) {
   if (!status || status === "idle") return null;
 
   const map = {
-    uploading: { label: `Uploading${progress > 0 ? ` ${Math.round(progress)}%` : "..."}`, color: "#f4a261" },
-    done:      { label: "On YouTube ✓", color: "#ff4444" },
-    error:     { label: "Upload failed", color: "#e63946" },
+    uploading:    { label: `Uploading${progress > 0 ? ` ${Math.round(progress)}%` : "..."}`, color: "#f4a261" },
+    done:         { label: "On YouTube ✓", color: "#ff4444" },
+    error:        { label: "Upload failed", color: "#e63946" },
   };
   const s = map[status];
   if (!s) return null;
@@ -66,6 +68,24 @@ function YtUploadBadge({ status, progress, videoUrl }) {
             ▶ {s.label}
           </a>
         : s.label}
+    </span>
+  );
+}
+
+function YtCaptionBadge({ status }) {
+  const map = {
+    transcribing: { label: "Transcribing clip...", color: "#f4a261" },
+    pending:      { label: "Captions pending",    color: "#888" },
+    uploading:    { label: "Uploading captions...", color: "#f4a261" },
+    done:         { label: "Captions ✓",           color: "#2a9d8f" },
+    error:        { label: "Captions failed",      color: "#e63946" },
+  };
+  const s = map[status];
+  if (!s) return null;
+  return (
+    <span className="export-badge" style={{ color: s.color, borderColor: s.color }}>
+      {(status === "transcribing" || status === "uploading") && <span className="export-spinner" />}
+      {s.label}
     </span>
   );
 }
@@ -162,6 +182,7 @@ export default function ExportsPanel({ onClose, ytAuthenticated }) {
                       progress={ex.yt_upload_progress}
                       videoUrl={ex.yt_video_url}
                     />
+                    <YtCaptionBadge status={ex.yt_caption_status} />
                   </div>
                   {ex.error && <span className="export-item-error">{ex.error}</span>}
                   {ex.yt_upload_error && (

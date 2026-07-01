@@ -69,6 +69,8 @@ def init_db():
             "yt_upload_error":    "TEXT",
             "yt_video_id":        "TEXT",
             "yt_video_url":       "TEXT",
+            "yt_caption_status":  "TEXT DEFAULT 'idle'",
+            "yt_caption_error":   "TEXT",
         }
         for col, col_def in yt_cols.items():
             if col not in existing_cols:

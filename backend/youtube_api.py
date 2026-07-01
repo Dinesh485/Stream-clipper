@@ -5,9 +5,10 @@ YouTube Data API v3 helpers.
 """
 
 import os
+import io
 from pathlib import Path
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from google.oauth2.credentials import Credentials
 
 YOUTUBE_API_SERVICE = "youtube"
@@ -90,6 +91,45 @@ def list_live_broadcasts(
     return {"items": result, "nextPageToken": next_page}
 
 
+# ── Captions ─────────────────────────────────────────────────────────────
+
+def upload_captions(
+    creds: Credentials,
+    video_id: str,
+    srt_content: str,
+    language: str = "en",
+    name: str = "English",
+) -> dict:
+    """
+    Upload an SRT caption track to a YouTube video.
+    Returns the created caption resource.
+    """
+    yt = _yt_client(creds)
+
+    body = {
+        "snippet": {
+            "videoId":  video_id,
+            "language": language,
+            "name":     name,
+            "isDraft":  False,
+        }
+    }
+
+    media = MediaIoBaseUpload(
+        io.BytesIO(srt_content.encode("utf-8")),
+        mimetype="application/octet-stream",
+        resumable=False,
+    )
+
+    response = yt.captions().insert(
+        part="snippet",
+        body=body,
+        media_body=media,
+    ).execute()
+
+    return response
+
+
 # ── Upload ────────────────────────────────────────────────────────────────
 
 def upload_video(
@@ -112,9 +152,11 @@ def upload_video(
 
     body = {
         "snippet": {
-            "title":       title[:100],   # YouTube title limit
-            "description": description,
-            "categoryId":  "22",          # "People & Blogs" — generic default
+            "title":                title[:100],
+            "description":          description,
+            "categoryId":           "22",
+            "defaultLanguage":      "en",
+            "defaultAudioLanguage": "en",
         },
         "status": {
             "privacyStatus":          privacy_status,

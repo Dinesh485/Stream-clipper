@@ -14,14 +14,14 @@ from db import (init_db, get_setting, set_setting, get_all_settings,
                 insert_video, get_video, list_videos, delete_video, update_video,
                 insert_export, get_export, list_exports, update_export, delete_export)
 from downloader import get_video_info, download_video, download_thumbnail, cancel_download, DOWNLOADS_DIR
-from transcriber import transcribe, read_transcript
+from transcriber import transcribe, read_transcript, transcribe_file, generate_srt
 from gemini import get_clip_ideas
 from exporter import export_clip, EXPORTS_DIR
 from youtube_auth import (
     get_client_credentials, set_client_credentials,
     get_auth_url, exchange_code, get_valid_credentials, clear_token,
 )
-from youtube_api import list_live_broadcasts, upload_video
+from youtube_api import list_live_broadcasts, upload_video, upload_captions
 import cache as _cache
 
 app = FastAPI(title="Stream Clipper API")
@@ -718,18 +718,60 @@ def _run_generate_ideas(video_id: str):
 def _run_yt_upload(export_id: str, file_path: str, title: str, description: str, privacy_status: str):
     try:
         from youtube_auth import get_valid_credentials
-        from youtube_api import upload_video as yt_upload
         creds = get_valid_credentials()
         if not creds:
             raise RuntimeError("YouTube credentials are no longer valid. Please reconnect in Settings.")
+
+        # Step 1: transcribe the exported clip
+        update_export(export_id, yt_caption_status="transcribing")
+        whisper_model = get_setting("whisper_model") or "medium"
+
+        # Extract audio from the export file first
+        import subprocess, tempfile
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_audio = tmp.name
+
+        ffmpeg = str(Path(__file__).parent / "ffmpeg.exe")
+        result = subprocess.run(
+            [ffmpeg, "-y", "-i", file_path, "-vn",
+             "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", tmp_audio],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Audio extraction failed: {result.stderr}")
+
+        try:
+            segments = transcribe_file(tmp_audio, whisper_model)
+            srt_content = generate_srt(segments)
+        finally:
+            import os as _os
+            _os.unlink(tmp_audio)
+
+        # Step 2: upload video
+        update_export(export_id, yt_upload_status="uploading", yt_caption_status="pending",
+                      yt_video_id=None, yt_upload_error=None)
 
         def on_progress(uploaded: int, total: int):
             pct = round((uploaded / total) * 100, 1) if total else 0
             update_export(export_id, yt_upload_progress=pct)
 
-        result = yt_upload(creds, file_path, title, description, privacy_status, on_progress)
-        yt_video_id = result.get("id", "")
+        upload_result = upload_video(creds, file_path, title, description, privacy_status, on_progress)
+        yt_video_id = upload_result.get("id", "")
         yt_url = f"https://www.youtube.com/watch?v={yt_video_id}" if yt_video_id else ""
-        update_export(export_id, yt_upload_status="done", yt_video_id=yt_video_id, yt_video_url=yt_url, yt_upload_progress=100)
+        update_export(export_id, yt_upload_status="done", yt_video_id=yt_video_id,
+                      yt_video_url=yt_url, yt_upload_progress=100)
+
+        # Step 3: upload captions
+        if yt_video_id and srt_content:
+            update_export(export_id, yt_caption_status="uploading")
+            try:
+                upload_captions(creds, yt_video_id, srt_content)
+                update_export(export_id, yt_caption_status="done")
+            except Exception as cap_err:
+                # Caption failure is non-fatal — video is already uploaded
+                update_export(export_id, yt_caption_status="error",
+                              yt_caption_error=str(cap_err))
+
     except Exception as e:
-        update_export(export_id, yt_upload_status="error", yt_upload_error=str(e))
+        update_export(export_id, yt_upload_status="error", yt_upload_error=str(e),
+                      yt_caption_status="idle")
