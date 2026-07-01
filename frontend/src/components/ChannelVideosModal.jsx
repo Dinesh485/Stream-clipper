@@ -22,7 +22,7 @@ function formatDate(iso) {
 
 const PRIVACY_ICONS = { public: "🌍", private: "🔒", unlisted: "🔗" };
 
-export default function ChannelVideosModal({ onClose, onAdd, existingIds = [] }) {
+export default function ChannelVideosModal({ onClose, onAdd }) {
   const [videos, setVideos]           = useState([]);
   const [nextPageToken, setNextPage]  = useState(null);
   const [loading, setLoading]         = useState(true);
@@ -33,6 +33,14 @@ export default function ChannelVideosModal({ onClose, onAdd, existingIds = [] })
   const [adding, setAdding]           = useState({});
   const [added, setAdded]             = useState({});
   const [search, setSearch]           = useState("");
+  const [libraryIds, setLibraryIds]   = useState(new Set());
+
+  // Fetch current library IDs on open so we always reflect latest state
+  useEffect(() => {
+    api.listVideos()
+      .then(vs => setLibraryIds(new Set(vs.map(v => v.id))))
+      .catch(() => {});
+  }, []);
 
   const fetchPage = useCallback(async (pageToken = null, bust = false) => {
     try {
@@ -64,11 +72,12 @@ export default function ChannelVideosModal({ onClose, onAdd, existingIds = [] })
   }
 
   async function handleAdd(video) {
-    if (adding[video.id] || added[video.id] || existingIds.includes(video.id)) return;
+    if (adding[video.id] || added[video.id] || libraryIds.has(video.id)) return;
     setAdding(prev => ({ ...prev, [video.id]: true }));
     try {
       const result = await api.addVideo(`https://www.youtube.com/watch?v=${video.videoId}`);
       setAdded(prev => ({ ...prev, [video.id]: true }));
+      setLibraryIds(prev => new Set([...prev, video.id]));
       onAdd(result);
     } catch (e) {
       alert(e.response?.data?.detail || e.message || "Failed to add video");
@@ -136,7 +145,7 @@ export default function ChannelVideosModal({ onClose, onAdd, existingIds = [] })
             <>
               <div className="cv-list">
                 {filtered.map(video => {
-                  const alreadyAdded = existingIds.includes(video.id) || added[video.id];
+                  const alreadyAdded = libraryIds.has(video.id) || added[video.id];
                   const isAdding = adding[video.id];
                   const dateStr = formatDate(video.actualStartTime);
                   return (

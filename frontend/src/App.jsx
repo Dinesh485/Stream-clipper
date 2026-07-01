@@ -15,10 +15,8 @@ export default function App() {
   const [showSettings, setShowSettings]     = useState(false);
   const [showChannelVideos, setShowChannelVideos] = useState(false);
   const [ytAuthenticated, setYtAuthenticated] = useState(false);
-  const [libraryVideos, setLibraryVideos]   = useState([]); // for "already added" dedup
   const [homeRefreshKey, setHomeRefreshKey] = useState(0);
 
-  // Check YouTube auth status on mount and after settings close
   useEffect(() => {
     api.getYouTubeStatus()
       .then(s => setYtAuthenticated(s.authenticated))
@@ -27,22 +25,9 @@ export default function App() {
 
   function handleSettingsClose() {
     setShowSettings(false);
-    // Re-check auth status after settings may have changed
     api.getYouTubeStatus()
       .then(s => setYtAuthenticated(s.authenticated))
       .catch(() => {});
-  }
-
-  // Keep a live list of library video IDs so ChannelVideosModal can mark already-added ones
-  useEffect(() => {
-    api.listVideos().then(vs => setLibraryVideos(vs)).catch(() => {});
-  }, []);
-
-  function handleVideoAdded(video) {
-    setLibraryVideos(prev => {
-      if (prev.find(v => v.id === video.id)) return prev;
-      return [video, ...prev];
-    });
   }
 
   return (
@@ -86,7 +71,6 @@ export default function App() {
             onSelectVideo={(id) => { setSelectedVideoId(id); setPage("detail"); }}
             showAddModal={showAddModal}
             onAddModalClose={() => setShowAddModal(false)}
-            onVideoAdded={handleVideoAdded}
             refreshKey={homeRefreshKey}
           />
         )}
@@ -102,11 +86,7 @@ export default function App() {
       {showChannelVideos && (
         <ChannelVideosModal
           onClose={() => setShowChannelVideos(false)}
-          onAdd={(video) => {
-            handleVideoAdded(video);
-            setHomeRefreshKey(k => k + 1);
-          }}
-          existingIds={libraryVideos.map(v => v.id)}
+          onAdd={() => setHomeRefreshKey(k => k + 1)}
         />
       )}
     </div>
