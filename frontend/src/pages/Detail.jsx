@@ -609,10 +609,18 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
   }
 
   function addSegment() {
-    const last = segments[segments.length - 1];
-    const newStart = last ? last.end + 1 : 0;
-    const newEnd = newStart + 10;
-    setSegments(prev => [...prev, { id: Date.now(), start: newStart, end: newEnd }]);
+    // Use current video time as the start, default 30s duration
+    const currentT = videoRef.current?.currentTime ?? 0;
+    const duration = videoRef.current?.duration ?? 0;
+    const newStart = parseFloat(currentT.toFixed(2));
+    const newEnd   = parseFloat(Math.min(currentT + 30, duration || currentT + 30).toFixed(2));
+    const newSeg   = { id: Date.now(), start: newStart, end: newEnd };
+    setSegments(prev => [...prev, newSeg]);
+    setActiveIdx(prev => segments.length); // select the new one
+  }
+
+  function updateSegmentTime(idx, field, value) {
+    setSegments(p => p.map((s, i) => i === idx ? { ...s, [field]: value } : s));
   }
 
   function handleAddSegment(start, end) {
@@ -700,6 +708,7 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
               preload="auto"
               controls
               onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
+              onSeeked={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
               onLoadedMetadata={() => setVideoDuration(videoRef.current?.duration ?? 0)}
               onEnded={stopPreview}
             />
@@ -707,7 +716,7 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
 
           {/* Right: timeline + inout + segments + transcript stacked */}
           <div className="ie-vertical-right-col">
-            {videoDuration > 0 && segments.length > 0 && (
+            {videoDuration > 0 && (
               <Timeline
                 duration={videoDuration}
                 segments={segments}
@@ -746,20 +755,19 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
                 </div>
                 {segments.length === 0 && (
                   <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-                    Select text in the transcript to add segments.
+                    Click "+ Add" or select transcript text to create segments.
                   </p>
                 )}
                 {segments.map((seg, i) => (
-                  <div key={seg.id} className={`ie-seg-row ${i === activeIdx ? "ie-seg-active" : ""}`} onClick={() => setActiveIdx(i)}>
-                    <span className="ie-seg-num">{i + 1}</span>
-                    <span className="ie-seg-times">
-                      <span className="seg-in">{formatTime(Math.round(seg.start))}</span>
-                      <span className="seg-sep">→</span>
-                      <span className="seg-out">{formatTime(Math.round(seg.end))}</span>
-                    </span>
-                    <span className="ie-seg-dur-small">{formatTime(Math.round(Math.max(0, seg.end - seg.start)))}</span>
-                    <button className="ie-seg-remove" onClick={e => { e.stopPropagation(); removeSegment(i); }} disabled={segments.length <= 1}>✕</button>
-                  </div>
+                  <SegmentRow key={seg.id} seg={seg} idx={i} active={i === activeIdx}
+                    duration={videoDuration}
+                    onSelect={() => setActiveIdx(i)}
+                    onSetIn={() => { if (videoRef.current) updateSegmentTime(i, "start", parseFloat(videoRef.current.currentTime.toFixed(2))); }}
+                    onSetOut={() => { if (videoRef.current) updateSegmentTime(i, "end", parseFloat(videoRef.current.currentTime.toFixed(2))); }}
+                    onChange={(field, val) => updateSegmentTime(i, field, val)}
+                    onRemove={() => removeSegment(i)}
+                    canRemove={segments.length > 1}
+                  />
                 ))}
               </div>
               {transcript.length > 0 && (
@@ -778,11 +786,12 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
             preload="auto"
             controls
             onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
+            onSeeked={() => setCurrentTime(videoRef.current?.currentTime ?? 0)}
             onLoadedMetadata={() => setVideoDuration(videoRef.current?.duration ?? 0)}
             onEnded={stopPreview}
           />
 
-          {videoDuration > 0 && segments.length > 0 && (
+          {videoDuration > 0 && (
             <Timeline
               duration={videoDuration}
               segments={segments}
@@ -823,20 +832,19 @@ function InlineEditor({ videoId, activeIdea, activeIdeaIdx, transcribeStatus, do
               </div>
               {segments.length === 0 && (
                 <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Select text in the transcript to add segments, or click an idea on the left.
+                  Click "+ Add" or select transcript text to create segments.
                 </p>
               )}
               {segments.map((seg, i) => (
-                <div key={seg.id} className={`ie-seg-row ${i === activeIdx ? "ie-seg-active" : ""}`} onClick={() => setActiveIdx(i)}>
-                  <span className="ie-seg-num">{i + 1}</span>
-                  <span className="ie-seg-times">
-                    <span className="seg-in">{formatTime(Math.round(seg.start))}</span>
-                    <span className="seg-sep">→</span>
-                    <span className="seg-out">{formatTime(Math.round(seg.end))}</span>
-                  </span>
-                  <span className="ie-seg-dur-small">{formatTime(Math.round(Math.max(0, seg.end - seg.start)))}</span>
-                  <button className="ie-seg-remove" onClick={e => { e.stopPropagation(); removeSegment(i); }} disabled={segments.length <= 1}>✕</button>
-                </div>
+                <SegmentRow key={seg.id} seg={seg} idx={i} active={i === activeIdx}
+                  duration={videoDuration}
+                  onSelect={() => setActiveIdx(i)}
+                  onSetIn={() => { if (videoRef.current) updateSegmentTime(i, "start", parseFloat(videoRef.current.currentTime.toFixed(2))); }}
+                  onSetOut={() => { if (videoRef.current) updateSegmentTime(i, "end", parseFloat(videoRef.current.currentTime.toFixed(2))); }}
+                  onChange={(field, val) => updateSegmentTime(i, field, val)}
+                  onRemove={() => removeSegment(i)}
+                  canRemove={segments.length > 1}
+                />
               ))}
             </div>
             {transcript.length > 0 && (
@@ -956,5 +964,110 @@ function TranscriptPanel({ transcript, segments, currentTime, onAddSegment, onSe
         />
       )}
     </div>
+  );
+}
+
+// ── SegmentRow ─────────────────────────────────────────────────────────────
+
+function SegmentRow({ seg, idx, active, duration, onSelect, onSetIn, onSetOut, onChange, onRemove, canRemove }) {
+  const dur = Math.max(0, seg.end - seg.start);
+  return (
+    <div
+      className={`ie-seg-row ie-seg-row-editable ${active ? "ie-seg-active" : ""}`}
+      onClick={onSelect}
+    >
+      <span className="ie-seg-num">{idx + 1}</span>
+      <div className="ie-seg-edit-times" onClick={e => e.stopPropagation()}>
+        <div className="ie-seg-time-block">
+          <span className="ie-tag in-tag">IN</span>
+          <TimeInput
+            value={seg.start}
+            max={seg.end - 0.1}
+            onChange={val => onChange("start", val)}
+          />
+          <button
+            className="ie-seg-sethere"
+            title="Set IN to current playhead"
+            onClick={e => { e.stopPropagation(); onSetIn(); }}
+          >◀</button>
+        </div>
+        <span className="seg-sep">→</span>
+        <div className="ie-seg-time-block">
+          <button
+            className="ie-seg-sethere"
+            title="Set OUT to current playhead"
+            onClick={e => { e.stopPropagation(); onSetOut(); }}
+          >▶</button>
+          <TimeInput
+            value={seg.end}
+            min={seg.start + 0.1}
+            max={duration || undefined}
+            onChange={val => onChange("end", val)}
+          />
+          <span className="ie-tag out-tag">OUT</span>
+        </div>
+      </div>
+      <span className="ie-seg-dur-small">{formatTime(Math.round(dur))}</span>
+      <button
+        className="ie-seg-remove"
+        onClick={e => { e.stopPropagation(); onRemove(); }}
+        disabled={!canRemove}
+        title="Remove segment"
+      >✕</button>
+    </div>
+  );
+}
+
+// ── TimeInput ──────────────────────────────────────────────────────────────
+
+function TimeInput({ value, min, max, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [raw, setRaw]         = useState("");
+
+  // Keep display in sync when not editing
+  useEffect(() => {
+    if (!editing) setRaw(secsToStr(value));
+  }, [value, editing]);
+
+  function secsToStr(s) {
+    if (s == null || isNaN(s)) return "0:00";
+    const total = Math.floor(Math.abs(s));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    return `${m}:${String(sec).padStart(2, "0")}`;
+  }
+
+  function strToSecs(str) {
+    const parts = str.trim().split(":").map(Number);
+    if (parts.some(isNaN)) return null;
+    let secs = 0;
+    if (parts.length === 3) secs = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    else if (parts.length === 2) secs = parts[0] * 60 + parts[1];
+    else secs = parts[0];
+    return parseFloat(secs.toFixed(2));
+  }
+
+  function commit() {
+    setEditing(false);
+    const secs = strToSecs(raw);
+    if (secs == null) { setRaw(secsToStr(value)); return; }
+    let clamped = secs;
+    if (min != null) clamped = Math.max(min, clamped);
+    if (max != null) clamped = Math.min(max, clamped);
+    onChange(parseFloat(clamped.toFixed(2)));
+  }
+
+  return (
+    <input
+      className="time-input"
+      value={raw}
+      onFocus={() => { setEditing(true); setRaw(secsToStr(value)); }}
+      onChange={e => setRaw(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { setEditing(false); setRaw(secsToStr(value)); } }}
+      onClick={e => e.stopPropagation()}
+    />
   );
 }

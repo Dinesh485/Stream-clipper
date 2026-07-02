@@ -5,10 +5,77 @@
   border-bottom: 1px solid var(--border);
   user-select: none;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-canvas-wrap {
+  width: 100%;
 }
 
 .timeline-canvas {
   display: block;
   width: 100%;
   cursor: crosshair;
+}
+
+/* Zoom controls bar */
+.timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #0f0f0f;
+  border-top: 1px solid #1e1e1e;
+  flex-shrink: 0;
+}
+
+.tl-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+  padding: 0;
+  flex-shrink: 0;
+}
+.tl-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: #555;
+}
+.tl-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.tl-btn-text {
+  width: auto;
+  padding: 0 7px;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.tl-zoom-label {
+  font-size: 0.72rem;
+  font-family: "SF Mono", "Consolas", monospace;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: center;
+}
+
+/* Scroll range input */
+.tl-scrollbar {
+  flex: 1;
+  height: 3px;
+  cursor: pointer;
+  accent-color: var(--accent);
+  margin-left: 4px;
 }

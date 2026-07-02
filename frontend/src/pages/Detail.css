@@ -239,7 +239,6 @@
   font-size: 0.78rem; font-family: "SF Mono","Consolas",monospace;
   color: var(--text-muted); margin-left: auto;
 }
-.time-input { display: none; }
 
 /* Segments list inside editor */
 .ie-bottom-row {
@@ -250,7 +249,7 @@
   border-top: 1px solid var(--border);
 }
 .ie-segments {
-  width: 220px;
+  width: 260px;
   flex-shrink: 0;
   padding: 12px;
   display: flex;
@@ -273,6 +272,63 @@
 }
 .ie-seg-row:hover { border-color: #555; }
 .ie-seg-active { border-color: var(--accent) !important; background: rgba(230,57,70,0.05) !important; }
+
+.ie-seg-row-editable {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.ie-seg-row-editable .ie-seg-num {
+  align-self: flex-start;
+}
+
+.ie-seg-edit-times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ie-seg-time-block {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ie-seg-sethere {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  padding: 2px 5px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.ie-seg-sethere:hover {
+  color: var(--text);
+  border-color: #555;
+  background: var(--surface);
+}
+
+.time-input {
+  width: 64px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-family: "SF Mono", "Consolas", monospace;
+  font-weight: 600;
+  padding: 3px 6px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.time-input:focus { border-color: var(--accent); }
 .ie-seg-num {
   width: 20px; height: 20px; border-radius: 50%;
   background: var(--border); color: var(--text-muted);
