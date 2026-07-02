@@ -51,8 +51,10 @@ def transcribe(video_id: str, model_name: str = "medium") -> str:
 def transcribe_file(audio_path: str, model_name: str = "medium") -> list:
     """
     Run faster-whisper on an arbitrary audio file.
-    Returns list of segment dicts: [{ "start", "end", "text" }, ...]
-    (segment-level, not word-level — better for caption generation)
+    Returns list of caption-ready segment dicts: [{ "start", "end", "text" }, ...]
+
+    Uses word_timestamps=True and groups words into caption lines of ~10 words
+    so each caption entry has tight, accurate timing rather than one big block.
     """
     model = WhisperModel(model_name, device="cpu", compute_type="int8")
 
@@ -60,20 +62,74 @@ def transcribe_file(audio_path: str, model_name: str = "medium") -> list:
         audio_path,
         language="en",
         beam_size=5,
+        word_timestamps=True,
         vad_filter=True,
         vad_parameters={"min_silence_duration_ms": 500},
         condition_on_previous_text=False,
     )
 
-    return [
-        {
-            "start": round(seg.start, 3),
-            "end":   round(seg.end, 3),
-            "text":  seg.text.strip(),
-        }
-        for seg in segments_iter
-        if seg.text.strip()
-    ]
+    # Collect all words across all segments
+    words = []
+    for seg in segments_iter:
+        if seg.words:
+            for w in seg.words:
+                text = w.word.strip()
+                if text:
+                    words.append({
+                        "start": round(w.start, 3),
+                        "end":   round(w.end, 3),
+                        "word":  text,
+                    })
+
+    if not words:
+        return []
+
+    # Group into caption lines:
+    # Start a new line when we hit MAX_WORDS, a sentence-ending punctuation,
+    # or a gap of more than 1.5s between words.
+    MAX_WORDS   = 10
+    GAP_THRESH  = 1.5  # seconds
+
+    captions    = []
+    line_words  = []
+    line_start  = words[0]["start"]
+
+    SENTENCE_END = {".", "!", "?", "...", "…"}
+
+    for i, w in enumerate(words):
+        # Check gap from previous word
+        if line_words:
+            gap = w["start"] - line_words[-1]["end"]
+            if gap > GAP_THRESH:
+                captions.append(_make_caption(line_words, line_start))
+                line_words = []
+                line_start = w["start"]
+
+        line_words.append(w)
+
+        # Check if we should flush
+        ends_sentence = any(w["word"].endswith(p) for p in SENTENCE_END)
+        at_max        = len(line_words) >= MAX_WORDS
+
+        if ends_sentence or at_max:
+            captions.append(_make_caption(line_words, line_start))
+            line_words = []
+            if i + 1 < len(words):
+                line_start = words[i + 1]["start"]
+
+    # Flush remaining words
+    if line_words:
+        captions.append(_make_caption(line_words, line_start))
+
+    return captions
+
+
+def _make_caption(words: list, start: float) -> dict:
+    return {
+        "start": start,
+        "end":   words[-1]["end"],
+        "text":  " ".join(w["word"] for w in words),
+    }
 
 
 def generate_srt(segments: list) -> str:
